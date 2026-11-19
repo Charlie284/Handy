@@ -4,7 +4,7 @@
 
 **A free, open source, and extensible speech-to-text application that works completely offline.**
 
-Handy is a cross-platform desktop application that provides simple, privacy-focused speech transcription. Press a shortcut, speak, and have your words appear in any text field. This happens on your own computer without sending any information to the cloud.
+Handy is a cross-platform desktop application that provides simple, privacy-focused speech transcription. Press a shortcut, speak, and have your words appear in a text field. Speech recognition runs on your own computer. Optional LLM post-processing can send transcript text to your configured provider; it is not required for offline dictation (see [post-processing](docs/post-processing.md)).
 
 ## Why Handy?
 
@@ -21,15 +21,15 @@ Handy isn't trying to be the best speech-to-text app—it's trying to be the mos
 
 1. **Press** a configurable keyboard shortcut to start/stop recording (or use push-to-talk mode)
 2. **Speak** your words while the shortcut is active
-3. **Release** and Handy processes your speech using Whisper
+3. **Release** (or press again in toggle mode) and Handy finalizes transcription using your selected model
 4. **Get** your transcribed text pasted directly into whatever app you're using
 
-The process is entirely local:
+Speech recognition is local:
 
 - Silence is filtered using VAD (Voice Activity Detection) with Silero
 - Transcription uses your choice of models:
   - **Whisper models** (Small/Medium/Turbo/Large) with GPU acceleration when available
-  - **Parakeet V3** - CPU-optimized model with excellent performance and automatic language detection
+  - **Parakeet** and other GGUF/ONNX model families, with streaming, language detection, and translation depending on model capabilities (see [models](docs/models.md))
 - Works on Windows, macOS, and Linux
 
 ## Quick Start
@@ -49,6 +49,10 @@ The process is entirely local:
 
 For detailed build instructions including platform-specific requirements, see [BUILD.md](BUILD.md).
 
+### Documentation
+
+See the [documentation index](docs/README.md) for user guides, the complete settings reference, models, platform notes, and contributor/maintainer architecture documentation.
+
 ## Integrations
 
 <a href="https://www.raycast.com/mattiacolombomc/handy" title="Install Handy Raycast Extension"><img src="https://www.raycast.com/mattiacolombomc/handy/install_button@2x.png?v=1.1" height="64" style="height: 64px;" alt="Install handy Raycast Extension" /></a>
@@ -64,11 +68,11 @@ Handy is built as a Tauri application combining:
 - **Frontend**: React + TypeScript with Tailwind CSS for the settings UI
 - **Backend**: Rust for system integration, audio processing, and ML inference
 - **Core Libraries**:
-  - `transcribe-cpp`: Local speech recognition with Whisper-family models (GGML/GGUF)
-  - `transcribe-rs`: CPU-optimized speech recognition with Parakeet models
+  - `transcribe-cpp`: Local multi-architecture speech recognition (GGML/GGUF)
+  - `transcribe-rs`: ONNX speech recognition with Parakeet, Moonshine, SenseVoice, and other supported families
   - `cpal`: Cross-platform audio I/O
   - `vad-rs`: Voice Activity Detection
-  - `rdev`: Global keyboard shortcuts and system events
+  - `handy-keys` / Tauri global shortcut plugin: Selectable global shortcut backends
   - `rubato`: Audio resampling
 
 ### Debug Mode
@@ -160,7 +164,7 @@ Without these tools, Handy falls back to enigo which may have limited compatibil
 
   - For building from source on Ubuntu/Debian, you may also need `libgtk-layer-shell-dev`.
 
-- The recording overlay is disabled by default on Linux (`Overlay Position: None`) because certain compositors treat it as the active window. When the overlay is visible it can steal focus, which prevents Handy from pasting back into the application that triggered transcription. If you enable the overlay anyway, be aware that clipboard-based pasting might fail or end up in the wrong window.
+- The recording overlay is disabled by default on Linux (`Overlay Style: None`); position independently defaults to Bottom. Certain compositors can treat a visible overlay as the active window, interfering with pasting back into the application that triggered transcription. See [platform notes](docs/platform-notes.md).
 - If you are having trouble with the app, running with the environment variable `WEBKIT_DISABLE_DMABUF_RENDERER=1` may help
 - If Handy fails to start reliably on Linux, see [Troubleshooting → Linux Startup Crashes or Instability](#linux-startup-crashes-or-instability).
 - **Global keyboard shortcuts (Wayland):** On Wayland, system-level shortcuts must be configured through your desktop environment or window manager. Use the [CLI flags](#cli-parameters) as the command for your custom shortcut.
@@ -216,7 +220,7 @@ Without these tools, Handy falls back to enigo which may have limited compatibil
 **Overlay & Pasting Issues (Linux):**
 
 - The recording overlay window can interfere with pasting transcribed text into target applications on Linux (X11)
-- **Solution:** Open **Settings > Advanced** and set **"Overlay Position"** to **"None"** to disable the overlay
+- **Solution:** Set **Overlay Style** to **None** to disable the overlay
 - Enable **"Audio Feedback"** (also in Advanced) if you still want audible confirmation of recording state
 - Users who upgrade from older versions or import settings from other platforms may need to manually apply this change
 
@@ -412,22 +416,22 @@ Final structure should look like:
 3. Your manually installed models should now appear as "Downloaded"
 4. Select the model you want to use and test transcription
 
-### Custom Whisper Models
+### Custom GGML/GGUF Models
 
-Handy can auto-discover custom Whisper GGML models placed in the `models` directory. This is useful for users who want to use fine-tuned or community models not included in the default model list.
+Handy can auto-discover custom `.bin` and `.gguf` models placed in the `models` directory. They must be compatible with the bundled transcribe-cpp runtime; appearing in the model list does not guarantee a file can be loaded. See the [model guide](docs/models.md#adding-a-model).
 
 **How to use:**
 
-1. Obtain a Whisper model in GGML `.bin` format (e.g., from [Hugging Face](https://huggingface.co/models?search=whisper%20ggml))
-2. Place the `.bin` file in your `models` directory (see paths above)
+1. Obtain a supported speech model in GGML `.bin` or GGUF `.gguf` format (e.g., from [Hugging Face](https://huggingface.co/models?search=whisper%20ggml))
+2. Place the model file in your `models` directory (see paths above)
 3. Restart Handy to discover the new model
 4. The model will appear in the "Custom Models" section of the Models settings page
 
 **Important:**
 
 - Community models are user-provided and may not receive troubleshooting assistance
-- The model must be a valid Whisper GGML format (`.bin` file)
-- Model name is derived from the filename (e.g., `my-custom-model.bin` → "My Custom Model")
+- The file must be supported by the pinned runtime, not merely have a matching extension
+- Model names use probed GGUF metadata when available, otherwise a name derived from the filename (e.g., `my-custom-model.bin` → "My Custom Model")
 
 ### Linux Startup Crashes or Instability
 

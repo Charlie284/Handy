@@ -66,7 +66,10 @@ Handy is a cross-platform desktop speech-to-text application built with Tauri 2.
   - `vad/` - Voice Activity Detection (Silero VAD)
 - `commands/` - Tauri command handlers for frontend communication
 - `cli.rs` - CLI argument definitions (clap derive)
-- `shortcut.rs` - Global keyboard shortcut handling
+- `shortcut/` - Global keyboard shortcut backends, dispatch, and settings commands
+- `transcription_coordinator.rs` - Serialized recording/transcription lifecycle
+- `catalog/` - Bundled offline model catalog
+- `paste_tx/` - Optional receipt-sequenced clipboard restoration (macOS/Windows)
 - `settings.rs` - Application settings management
 - `overlay.rs` - Recording overlay window (platform-specific)
 - `signal_handle.rs` - `send_transcription_input()` reusable function
@@ -94,7 +97,7 @@ Handy is a cross-platform desktop speech-to-text application built with Tauri 2.
 
 **Command-Event Architecture:** Frontend → Backend via Tauri commands; Backend → Frontend via events.
 
-**Pipeline Processing:** Audio → VAD → Whisper/Parakeet → Text output → Clipboard/Paste
+**Pipeline Processing:** Audio → optional VAD → selected recognition engine → optional LLM refinement → text delivery/history
 
 **State Flow:** Zustand → Tauri Command → Rust State → Persistence (tauri-plugin-store)
 
@@ -102,21 +105,21 @@ Handy is a cross-platform desktop speech-to-text application built with Tauri 2.
 
 **Core Libraries:**
 
-- `transcribe-cpp` - Local Whisper-family inference (GGML/GGUF) with GPU acceleration
+- `transcribe-cpp` - Local multi-architecture inference (GGML/GGUF) with GPU acceleration
 - `transcribe-rs` - ONNX speech recognition (Parakeet, Moonshine, SenseVoice, etc.)
 - `cpal` - Cross-platform audio I/O
 - `vad-rs` - Voice Activity Detection
-- `rdev` - Global keyboard shortcuts
+- `handy-keys` / Tauri global shortcut plugin - Selectable global shortcut backends
 - `rubato` - Audio resampling
 - `rodio` - Audio playback for feedback sounds
 
 ### Application Flow
 
-1. **Initialization:** App starts minimized to tray, loads settings, initializes managers
-2. **Model Setup:** First-run downloads preferred Whisper model (Small/Medium/Turbo/Large)
+1. **Initialization:** App loads settings and initializes managers; window visibility follows startup settings/CLI flags, with a headless CLI path handled separately
+2. **Model Setup:** Onboarding selects/downloads a supported model from the registry
 3. **Recording:** Global shortcut triggers audio recording with VAD filtering
-4. **Processing:** Audio sent to Whisper model for transcription
-5. **Output:** Text pasted to active application via system clipboard
+4. **Processing:** Audio sent to the selected engine; capable models support streaming
+5. **Output:** Optional LLM refinement, history, and configured clipboard/direct/script delivery
 
 ### Settings System
 
@@ -124,8 +127,10 @@ Settings are stored using Tauri's store plugin with reactive updates:
 
 - Keyboard shortcuts (configurable, supports push-to-talk)
 - Audio devices (microphone/output selection)
-- Model preferences (Small/Medium/Turbo/Large Whisper variants)
+- Model selection, language, accelerators, and idle unloading
 - Audio feedback and translation options
+
+See [docs/README.md](docs/README.md) for audience guides, architecture, and the complete settings reference. Recognition is local; optional hosted LLM refinement sends transcript text to the configured provider.
 
 ### Single Instance Architecture
 
